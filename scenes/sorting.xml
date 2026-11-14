@@ -1,0 +1,135 @@
+<!--
+  Сцена «сортировка кубиков»: мобильный манипулятор, стол с кубиками и три цветных стола.
+
+  Вид сверху (ось X вправо, ось Y вверх, робот стартует в начале координат лицом по +X):
+
+                 [красный стол]
+                    (0, 1.4)
+
+   [зелёный стол]    РОБОТ ->     [стол с кубиками]
+     (-1.4, 0)       (0, 0)           (1.3, 0)
+
+                  [синий стол]
+                    (0, -1.4)
+
+  Все размеры в метрах, углы в градусах, массы в килограммах.
+-->
+<mujoco model="sorting">
+  <!-- Параметры решателя, рекомендованные авторами модели робота.
+       implicitfast: устойчивый интегратор для жёстких приводов;
+       elliptic + impratio: более точное трение, чтобы кубик не выскальзывал из захвата. -->
+  <option timestep="0.002" integrator="implicitfast" cone="elliptic" impratio="10"/>
+
+  <statistic center="0.3 0 0.4" extent="2.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="130" elevation="-30" offwidth="1280" offheight="720"/>
+  </visual>
+
+  <asset>
+    <!-- Готовая модель робота из MuJoCo Menagerie. Сам файл не правим, только подключаем. -->
+    <model name="tidybot" file="../models/stanford_tidybot/tidybot.xml"/>
+
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="2 2" reflectance="0.1"/>
+    <material name="wood" rgba="0.72 0.58 0.42 1"/>
+    <material name="leg" rgba="0.25 0.25 0.27 1"/>
+    <material name="red" rgba="0.85 0.12 0.12 1"/>
+    <material name="green" rgba="0.10 0.65 0.20 1"/>
+    <material name="blue" rgba="0.12 0.30 0.85 1"/>
+    <material name="red_table" rgba="0.80 0.50 0.50 1"/>
+    <material name="green_table" rgba="0.50 0.75 0.55 1"/>
+    <material name="blue_table" rgba="0.50 0.60 0.85 1"/>
+  </asset>
+
+  <!-- Классы по умолчанию: общие свойства, чтобы не повторять их в каждом объекте. -->
+  <default>
+    <default class="table_top">
+      <!-- столешница 0.6 x 0.6 м, верхняя грань на высоте 0.40 м -->
+      <geom type="box" size="0.3 0.3 0.02" pos="0 0 0.38" material="wood"/>
+    </default>
+    <default class="table_leg">
+      <geom type="box" size="0.02 0.02 0.18" material="leg"/>
+    </default>
+    <default class="cube">
+      <!-- кубик с ребром 4 см и массой 50 г -->
+      <geom type="box" size="0.02 0.02 0.02" mass="0.05" friction="1 0.005 0.0001"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+
+    <!-- Робот. Все его имена получают префикс "robot/": robot/joint_x, robot/wrist и т.д. -->
+    <attach model="tidybot" body="base_link" prefix="robot/"/>
+
+    <!-- Камера общего вида для снимков и видео -->
+    <body name="scene_center" pos="0.3 0 0.3"/>
+    <camera name="overview" pos="-2.4 -3.0 3.0" mode="targetbody" target="scene_center" fovy="50"/>
+
+    <!-- Стол с кубиками (столешница 0.6 x 1.0 м). Тело без сочленений неподвижно. -->
+    <body name="table_source" pos="1.3 0 0">
+      <geom name="table_source_top" class="table_top" size="0.3 0.5 0.02"/>
+      <geom class="table_leg" pos=" 0.26  0.46 0.18"/>
+      <geom class="table_leg" pos=" 0.26 -0.46 0.18"/>
+      <geom class="table_leg" pos="-0.26  0.46 0.18"/>
+      <geom class="table_leg" pos="-0.26 -0.46 0.18"/>
+    </body>
+
+    <!-- Три стола назначения, цвет столешницы = цвет кубиков, которые сюда нужно привезти -->
+    <body name="table_red" pos="0 1.4 0">
+      <geom name="table_red_top" class="table_top" material="red_table"/>
+      <geom class="table_leg" pos=" 0.26  0.26 0.18"/>
+      <geom class="table_leg" pos=" 0.26 -0.26 0.18"/>
+      <geom class="table_leg" pos="-0.26  0.26 0.18"/>
+      <geom class="table_leg" pos="-0.26 -0.26 0.18"/>
+    </body>
+
+    <body name="table_green" pos="-1.4 0 0">
+      <geom name="table_green_top" class="table_top" material="green_table"/>
+      <geom class="table_leg" pos=" 0.26  0.26 0.18"/>
+      <geom class="table_leg" pos=" 0.26 -0.26 0.18"/>
+      <geom class="table_leg" pos="-0.26  0.26 0.18"/>
+      <geom class="table_leg" pos="-0.26 -0.26 0.18"/>
+    </body>
+
+    <body name="table_blue" pos="0 -1.4 0">
+      <geom name="table_blue_top" class="table_top" material="blue_table"/>
+      <geom class="table_leg" pos=" 0.26  0.26 0.18"/>
+      <geom class="table_leg" pos=" 0.26 -0.26 0.18"/>
+      <geom class="table_leg" pos="-0.26  0.26 0.18"/>
+      <geom class="table_leg" pos="-0.26 -0.26 0.18"/>
+    </body>
+
+    <!-- Кубики. freejoint даёт телу 6 степеней свободы, то есть оно свободно падает и катается. -->
+    <body name="cube_red_1" pos="1.12 -0.30 0.42" euler="0 0 15">
+      <freejoint/>
+      <geom class="cube" material="red"/>
+    </body>
+    <body name="cube_green_1" pos="1.12 0.00 0.42" euler="0 0 -20">
+      <freejoint/>
+      <geom class="cube" material="green"/>
+    </body>
+    <body name="cube_blue_1" pos="1.12 0.30 0.42" euler="0 0 40">
+      <freejoint/>
+      <geom class="cube" material="blue"/>
+    </body>
+    <body name="cube_blue_2" pos="1.26 -0.15 0.42" euler="0 0 5">
+      <freejoint/>
+      <geom class="cube" material="blue"/>
+    </body>
+    <body name="cube_red_2" pos="1.26 0.15 0.42" euler="0 0 -35">
+      <freejoint/>
+      <geom class="cube" material="red"/>
+    </body>
+    <body name="cube_green_2" pos="1.26 0.40 0.42" euler="0 0 25">
+      <freejoint/>
+      <geom class="cube" material="green"/>
+    </body>
+  </worldbody>
+</mujoco>
