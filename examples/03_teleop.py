@@ -14,14 +14,14 @@
 
 В отличие от шага 1, здесь цикл физики крутит наш код, а просмотрщик только
 рисует (режим launch_passive). Так устроена любая программа управления.
+
+В правом нижнем углу окна показано, что видит камера на запястье: цвет и глубина.
 """
-import time
-
-import mujoco
-import mujoco.viewer
-import numpy as np
-
+# sortbot_sim импортируется раньше mujoco: он включает рендер камеры без окна.
 from sortbot_sim import SortingSim
+from sortbot_sim.window import Window
+
+import numpy as np
 
 LIN_STEP, LIN_MAX = 0.1, 0.5  # м/с
 ANG_STEP, ANG_MAX = 0.3, 1.2  # рад/с
@@ -79,14 +79,14 @@ def main():
     teleop = Teleop(sim)
     print(__doc__)
 
-    with mujoco.viewer.launch_passive(sim.model, sim.data, key_callback=teleop.on_key) as viewer:
-        while viewer.is_running():
-            start = time.time()
-            teleop.apply()
-            sim.step()
-            viewer.sync()
-            # Ждём, чтобы симуляция шла в реальном времени.
-            time.sleep(max(0.0, sim.dt - (time.time() - start)))
+    # Window открывает просмотрщик, следит, чтобы симуляция шла в реальном времени,
+    # и завершает программу, когда окно закрывают.
+    window = Window(sim, key_callback=teleop.on_key)
+    window.show_camera("robot/wrist")
+    while True:
+        teleop.apply()
+        sim.step()
+        window.on_step()
 
 
 if __name__ == "__main__":

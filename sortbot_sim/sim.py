@@ -9,12 +9,15 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+from sortbot_sim.ik import solve_ik
+
 SCENE_PATH = Path(__file__).resolve().parents[1] / "scenes" / "sorting.xml"
 
 BASE_JOINTS = ["robot/joint_x", "robot/joint_y", "robot/joint_th"]
 ARM_JOINTS = [f"robot/joint_{i}" for i in range(1, 8)]
 GRIPPER_ACTUATOR = "robot/fingers_actuator"
 PINCH_SITE = "robot/pinch_site"
+GRIPPER_FULL_TRAVEL = 0.8  # ход привода захвата от открытого до сжатого до упора, рад
 
 # Насколько цель привода базы может опережать саму базу (м, м, рад).
 # Привод базы очень жёсткий: без этого предела робот, упёршись в стол,
@@ -71,6 +74,15 @@ class SortingSim:
         """Углы, которые сейчас заданы приводам руки, рад."""
         return self.data.ctrl[self.arm_act].copy()
 
+    @property
+    def gripper_closure(self):
+        """Насколько сжат захват на самом деле: 0 открыт, 1 сжат до упора.
+
+        Сжатый пустой захват даёт около 1, а с кубиком 4 см между пальцами около 0.57:
+        так робот узнаёт, что кубик взят, не подглядывая в симулятор.
+        """
+        return float(np.clip(self.data.actuator_length[self.gripper_act] / GRIPPER_FULL_TRAVEL, 0, 1))
+
     def body_pos(self, name):
         return self.data.body(name).xpos.copy()
 
@@ -78,6 +90,10 @@ class SortingSim:
         """Угол поворота тела вокруг вертикали, рад."""
         mat = self.data.body(name).xmat.reshape(3, 3)
         return np.arctan2(mat[1, 0], mat[0, 0])
+
+    def solve_ik(self, target_pos, target_mat, q_init=None):
+        """Углы руки, при которых точка захвата окажется в заданной позе в мире: (углы, сошлось ли)."""
+        return solve_ik(self, target_pos, target_mat, q_init=q_init)
 
     # ---- команды ----
 

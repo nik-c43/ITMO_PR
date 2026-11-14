@@ -10,8 +10,12 @@ requires-python = ">=3.10"
 dependencies = [
     "mujoco>=4.0,<5",
     "numpy",
+    "opencv-python-headless",
     "pillow",
 ]
 
 [tool.setuptools]
-packages = ["sortbot_sim"]
+packages = ["sortbot_motion", "sortbot_sim", "sortbot_task", "sortbot_vision"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
