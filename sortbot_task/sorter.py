@@ -42,10 +42,6 @@ class SortResult:
     left: list = field(default_factory=list)  # кубики, которые остались на столе-источнике
     rounds: int = 0  # сколько раз осматривали стол
 
-    @property
-    def ok(self):
-        return not self.left
-
 
 class Sorter:
     def __init__(self, skills, camera, detector, tables, memory=None, config=None, log=print):
@@ -88,8 +84,7 @@ class Sorter:
     def observe_source(self):
         """Общий взгляд на стол-источник: обновить в памяти всё, что на нём лежит."""
         table = self.source
-        near_edge = table.center - table.depth * table.direction
-        self.skills.look_over_table(near_edge, table.heading, table.surface_z)
+        self.skills.look_over_table(table.near_edge, table.heading, table.surface_z)
         return self.look(forget_missing=True)
 
     def look(self, forget_missing):
@@ -99,7 +94,7 @@ class Sorter:
         detections = [d for d in self.detector.detect(frame, surface_z=table.surface_z)
                       if table.contains(d.position, cfg.table_margin)]
         visible = (lambda p: in_view(frame, p, cfg.view_margin)) if forget_missing else None
-        return self.memory.observe(detections, frame.stamp, in_view=visible)
+        return self.memory.observe(detections, in_view=visible)
 
     # ---- один кубик ----
 
@@ -121,18 +116,17 @@ class Sorter:
         except RuntimeError as error:  # рука не дотягивается до нужной точки
             self.log(f"  не получилось: {error}")
             self.skills.robot.set_gripper(0.0)
-            self._back_off()
-            self.memory.forget(cube)
-            return False
+            return self._abandon(cube)
 
     def _deliver(self, cube):
         cfg, skills, memory = self.config, self.skills, self.memory
         source, table = self.source, self.destinations[cube.color]
-        self.log(f"Кубик {cube.id} ({cube.color}): еду к нему")
+        self.log(f"Кубик {cube.id} ({cube.color}) в точке {_xy(cube.position)}: еду к нему")
 
         # 1. Подъехать и уточнить положение взглядом сверху вблизи.
         if not skills.approach(cube.position, source.heading):
-            self.log("  не смог подъехать")
+            self.log(f"  не смог подъехать: база в {_xy(skills.robot.base_pose)}, "
+                     f"нужно в {_xy(skills.grasp_base_pose(cube.position, source.heading))}")
             return self._abandon(cube)
         skills.look_down_at(cube.position, yaw=source.heading)
         # Соседние кубики в этом кадре могут быть обрезаны или закрыты захватом,
@@ -140,6 +134,8 @@ class Sorter:
         if cube not in self.look(forget_missing=False):
             self.log("  вблизи кубика нет на месте, забываю его")
             return self._abandon(cube)
+
+        self.log(f"  вблизи: {_xy(cube.position)}, поворот {np.degrees(cube.yaw):.0f}°")
 
         # 2. Взять. Пустой захват сжимается до упора: так видно, что кубик не взят.
         skills.pick(cube.position, cube.yaw)
@@ -156,7 +152,8 @@ class Sorter:
         self.log(f"  везу на {table.name}")
         reached = skills.approach(place, table.heading)
         if not reached or not skills.holding():
-            self.log("  кубик потерян по дороге" if reached else "  не смог подъехать к столу")
+            self.log(f"  кубик потерян по дороге, захват сжат на {skills.robot.gripper_closure:.2f}"
+                     if reached else "  не смог подъехать к столу")
             skills.robot.set_gripper(0.0)
             return self._abandon(cube)
         skills.place(place + [0.0, 0.0, cfg.release_height], table.heading)
@@ -173,3 +170,7 @@ class Sorter:
         """Сложить руку и отъехать от стола."""
         self.skills.move_arm(self.arm_folded)
         self.skills.retreat()
+
+
+def _xy(point):
+    return f"({point[0]:.3f}, {point[1]:.3f})"

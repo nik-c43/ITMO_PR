@@ -7,7 +7,7 @@ from sortbot_vision.types import CubeDetection
 
 
 def det(color, x, y, yaw=0.0):
-    return CubeDetection(color, np.array([x, y, 0.42]), yaw, (0.04, 0.04), (0.0, 0.0), 100)
+    return CubeDetection(color, np.array([x, y, 0.42]), yaw, (0.04, 0.04))
 
 
 def everything(_):
@@ -16,10 +16,10 @@ def everything(_):
 
 def test_same_cube_seen_twice_is_one_cube_with_latest_position():
     memory = CubeMemory()
-    memory.observe([det("red", 1.000, 0.0)], stamp=1.0)
-    memory.observe([det("red", 1.004, 0.0)], stamp=2.0)
+    memory.observe([det("red", 1.000, 0.0, yaw=0.1)])
+    memory.observe([det("red", 1.004, 0.0, yaw=0.2)])
     (cube,) = memory.waiting()
-    assert cube.sightings == 2 and cube.stamp == 2.0
+    assert cube.yaw == 0.2
     np.testing.assert_allclose(cube.position[:2], [1.004, 0.0])
 
 
@@ -63,3 +63,10 @@ def test_table_slots_are_on_the_table_near_the_robot_side():
     np.testing.assert_allclose(slots[0], [0.0, 1.25], atol=1e-9)  # первым занимается место посередине
     assert all(s[1] < table.center[1] for s in slots)  # робот подъезжает со стороны меньших y
     assert not table.contains([0.0, 1.75])
+
+
+def test_table_knows_whether_a_cube_stands_on_it():
+    table = Table("table_red", np.array([0.0, 1.4]), np.array([0.3, 0.3]), 0.40, heading=np.pi / 2, color="red")
+    assert table.holds_cube(np.array([0.1, 1.3, 0.42]))
+    assert not table.holds_cube(np.array([0.1, 1.3, 0.46]))  # висит над столом, например в захвате
+    assert not table.holds_cube(np.array([0.5, 1.3, 0.42]))  # в стороне от столешницы

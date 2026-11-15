@@ -42,6 +42,8 @@ class SortingSim:
         self.arm_act = np.array([m.actuator(n).id for n in ARM_JOINTS])
         self.gripper_act = m.actuator(GRIPPER_ACTUATOR).id
         self.pinch_site = m.site(PINCH_SITE).id
+        # Кубики сцены: тела с именами cube_<цвет>_<номер>.
+        self.cube_names = [m.body(b).name for b in range(m.nbody) if m.body(b).name.startswith("cube_")]
 
         self.cmd_vel = np.zeros(3)
         self.reset()
@@ -58,6 +60,11 @@ class SortingSim:
     @property
     def dt(self):
         return self.model.opt.timestep
+
+    @property
+    def time(self):
+        """Модельное время, с."""
+        return self.data.time
 
     @property
     def base_pose(self):

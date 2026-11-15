@@ -1,0 +1,45 @@
+# Параметры узлов. Описание столов на настоящем роботе придёт из карты; пока оно задано здесь
+# и совпадает со сценой scenes/sorting.xml.
+
+sim_bridge:
+  ros__parameters:
+    camera_rate: 5.0        # кадров в секунду модельного времени
+    state_rate: 50.0        # /joint_states, /odom и TF в секунду
+
+cube_detector:
+  ros__parameters:
+    surface_z: 0.40         # высота столешниц, м
+    cube_size: 0.04         # ребро кубика, м
+
+sorter:
+  ros__parameters:
+    control_rate: 50.0      # сколько раз в секунду узел шлёт команды базе и руке
+
+# Общий блок: столы нужны и узлу сортировки, и проверке результата.
+/**:
+  ros__parameters:
+    tables:
+      table_source:
+        center: [1.3, 0.0]      # центр столешницы в кадре map, м
+        half_size: [0.3, 0.5]   # половины сторон вдоль X и Y, м
+        surface_z: 0.40         # высота столешницы, м
+        heading: 0.0            # куда смотрит робот, стоя у стола, рад
+        color: ""               # пусто: с этого стола забираем
+      table_red:
+        center: [0.0, 1.4]
+        half_size: [0.3, 0.3]
+        surface_z: 0.40
+        heading: 1.5707963
+        color: "red"
+      table_green:
+        center: [-1.4, 0.0]
+        half_size: [0.3, 0.3]
+        surface_z: 0.40
+        heading: 3.1415927
+        color: "green"
+      table_blue:
+        center: [0.0, -1.4]
+        half_size: [0.3, 0.3]
+        surface_z: 0.40
+        heading: -1.5707963
+        color: "blue"

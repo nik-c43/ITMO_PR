@@ -19,3 +19,7 @@ packages = ["sortbot_motion", "sortbot_sim", "sortbot_task", "sortbot_vision"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+
+[tool.pytest.ini_options]
+# Тесты пакета ROS (ros/sortbot_ros/test) запускаются отдельно, в контейнере: им нужен ROS 2.
+testpaths = ["tests"]

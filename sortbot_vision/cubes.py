@@ -99,9 +99,7 @@ class CubeDetector:
 
         cx, cy = 0.5 * (low + high) @ cube_from_world
         center = np.array([cx, cy, np.median(top[:, 2]) - 0.5 * cfg.cube_size])
-        v, u = np.nonzero(blob)
-        return CubeDetection(color, center, float(yaw), (float(long_side), float(short_side)),
-                             (float(u.mean()), float(v.mean())), len(top))
+        return CubeDetection(color, center, float(yaw), (float(long_side), float(short_side)))
 
 
 def draw_detections(frame, detections, cube_size=0.04):

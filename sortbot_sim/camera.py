@@ -54,7 +54,6 @@ class SimCamera:
             raise RuntimeError("Камере симулятора нужен рендер без окна: импортируйте sortbot_sim "
                                "раньше, чем mujoco, или задайте переменную окружения MUJOCO_GL=egl")
         self.sim = sim
-        self.name = name
         self.sensor = sensor
         self.camera_id = sim.model.camera(name).id
         if sensor.fovy_deg is not None:
@@ -72,11 +71,15 @@ class SimCamera:
         depth = self.renderer.render().copy()
         self.renderer.disable_depth_rendering()
         rgb, depth = self._apply_sensor(rgb, depth)
+        return RgbdFrame(rgb, depth, self.intrinsics, self.pose(), stamp=data.time)
 
+    def pose(self):
+        """Поза оптического кадра камеры в мире, матрица 4x4. Рендер для этого не нужен."""
+        data = self.sim.data
         world_from_camera = np.eye(4)
         world_from_camera[:3, :3] = data.cam_xmat[self.camera_id].reshape(3, 3) @ MUJOCO_FROM_OPTICAL
         world_from_camera[:3, 3] = data.cam_xpos[self.camera_id]
-        return RgbdFrame(rgb, depth, self.intrinsics, world_from_camera, stamp=data.time)
+        return world_from_camera
 
     def _apply_sensor(self, rgb, depth):
         """Испортить идеальный кадр так, как это делает настоящий сенсор."""
@@ -91,7 +94,7 @@ class SimCamera:
             missing |= (cv2.dilate(depth, kernel) - cv2.erode(depth, kernel)) > s.edge_step
 
         if s.depth_noise_at_1m > 0:
-            noise = self.rng.standard_normal(depth.shape).astype(np.float32)
+            noise = self.rng.standard_normal(depth.shape, dtype=np.float32)
             if s.noise_blur_px > 0:
                 # Глубина считается по окну пикселей, поэтому ошибки соседей похожи.
                 noise = cv2.GaussianBlur(noise, (0, 0), s.noise_blur_px)
@@ -102,8 +105,11 @@ class SimCamera:
         depth[missing] = 0.0  # так RealSense отмечает пиксели без глубины
 
         if s.rgb_noise > 0:
-            noisy = rgb + self.rng.normal(0.0, s.rgb_noise, rgb.shape)
-            rgb = np.clip(noisy, 0, 255).astype(np.uint8)
+            # Шум считает OpenCV: это в несколько раз быстрее, чем numpy на полном кадре.
+            cv2.setRNGSeed(int(self.rng.integers(2**31 - 1)))
+            noise = np.empty(rgb.shape, np.int16)
+            cv2.randn(noise, 0.0, s.rgb_noise)
+            rgb = cv2.add(rgb, noise, dtype=cv2.CV_8U)
         return rgb, depth
 
     def close(self):

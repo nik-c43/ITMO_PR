@@ -7,19 +7,14 @@
 (на запястье). Для каждой сохраняем цветной кадр и карту глубины: расстояние
 до поверхности в каждом пикселе. Это то же, что даёт стереокамера.
 """
-import os
-from pathlib import Path
-
-# Рендер без окна. Переменную нужно задать до импорта mujoco.
-os.environ.setdefault("MUJOCO_GL", "egl")
+# sortbot_sim импортируется раньше mujoco: он включает рендер без окна (MUJOCO_GL=egl).
+from _setup import OUT_DIR
+from sortbot_sim import SortingSim
 
 import mujoco
 import numpy as np
 from PIL import Image
 
-from sortbot_sim import SortingSim
-
-OUT_DIR = Path(__file__).resolve().parents[1] / "out"
 MAX_DEPTH = 4.0  # м, всё, что дальше, на карте глубины будет белым
 
 sim = SortingSim()
@@ -28,7 +23,7 @@ sim.set_cmd_vel(0.3, 0.0, 0.0)
 for _ in range(int(1.5 / sim.dt)):
     sim.step()
 
-OUT_DIR.mkdir(exist_ok=True)
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 with mujoco.Renderer(sim.model, height=480, width=640) as renderer:
     for camera in ["overview", "robot/base", "robot/wrist"]:
         name = camera.replace("/", "_")

@@ -2,7 +2,7 @@
 # sortbot_sim импортируется раньше mujoco: он включает рендер без окна.
 from sortbot_sim import SortingSim
 from sortbot_sim.camera import SimCamera
-from sortbot_sim.world import tables_from_sim
+from sortbot_sim.world import cube_positions, placement_report, tables_from_sim
 from sortbot_motion import Skills
 from sortbot_task import Sorter
 from sortbot_vision.cubes import CubeDetector
@@ -55,23 +55,18 @@ class Run:
         self.camera.close()
         return result
 
-    def table_of(self, name):
-        """На каком столе кубик на самом деле."""
-        position = self.sim.body_pos(name)
-        for table in self.tables:
-            if table.contains(position) and abs(position[2] - table.surface_z - 0.02) < 0.005:
-                return table.name
-        return None
-
-
-CUBES = ["cube_red_1", "cube_red_2", "cube_green_1", "cube_green_2", "cube_blue_1", "cube_blue_2"]
+    def correctly_placed(self, exclude=()):
+        """Сколько кубиков (кроме exclude) стоит на столах своего цвета и сколько их всего."""
+        positions = {name: p for name, p in cube_positions(self.sim).items() if name not in exclude}
+        _, correct, total = placement_report(self.tables, positions)
+        return correct, total
 
 
 def test_all_cubes_end_up_on_tables_of_their_color():
     run = Run()
     result = run.finish()
-    assert result.ok and len(result.delivered) == 6 and result.rounds == 2
-    assert {name: run.table_of(name) for name in CUBES} == {name: "table_" + name.split("_")[1] for name in CUBES}
+    assert not result.left and len(result.delivered) == 6 and result.rounds == 2
+    assert run.correctly_placed() == (6, 6)
     assert not run.touched_tables, f"робот задел стол: {run.touched_tables}"
     # Кубики на одном столе стоят порознь, а не друг на друге.
     for color in ("red", "green", "blue"):
@@ -80,7 +75,7 @@ def test_all_cubes_end_up_on_tables_of_their_color():
 
 
 def test_cubes_moved_and_removed_after_the_first_look():
-    """После первого осмотра один кубик сдвинули на 7 см, другой унесли, третий подложили."""
+    """После первого осмотра один кубик сдвинули на 7 см, другой унесли, третий переложили."""
     run = Run()
     done = []
 
@@ -93,8 +88,7 @@ def test_cubes_moved_and_removed_after_the_first_look():
 
     run.on_log = meddle
     result = run.finish()
-    assert result.ok and len(result.delivered) == 5
-    assert run.table_of("cube_blue_2") is None
-    for name in set(CUBES) - {"cube_blue_2"}:
-        assert run.table_of(name) == "table_" + name.split("_")[1], (name, run.log)
+    assert not result.left and len(result.delivered) == 5
+    assert run.correctly_placed(exclude=["cube_blue_2"]) == (5, 5), run.log
+    assert run.correctly_placed() == (5, 6)  # унесённый кубик робот не трогал
     assert not run.touched_tables

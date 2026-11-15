@@ -1,4 +1,7 @@
-"""Описание столов сцены для логики сортировки. На роботе эти данные придут из карты или параметров."""
+"""То, что в симуляции известно точно: столы сцены и истинные положения кубиков.
+
+Столы на настоящем роботе придут из карты или параметров. Истинных положений кубиков
+там нет вовсе: в симуляции они нужны только для проверки результата."""
 import numpy as np
 
 from sortbot_task.world import Table
@@ -26,3 +29,26 @@ def tables_from_sim(sim):
             color=color,
         ))
     return tables
+
+
+def cube_positions(sim):
+    """Истинные положения кубиков: {имя: (x, y, z)}. Робот их не знает, это только для проверок."""
+    return {name: sim.body_pos(name) for name in sim.cube_names}
+
+
+def placement_report(tables, positions):
+    """Сверить истинные положения кубиков со столами.
+
+    Возвращает (строки отчёта, сколько кубиков стоит на столах своего цвета, сколько всего).
+    """
+    lines, correct = [], 0
+    for name, position in sorted(positions.items()):
+        position = np.asarray(position)
+        color = name.split("_")[1]  # имена кубиков в сцене: cube_<цвет>_<номер>
+        table = next((t for t in tables if t.holds_cube(position)), None)
+        right = table is not None and table.color == color
+        correct += right
+        where = f"({position[0]:6.3f}, {position[1]:6.3f}, {position[2]:5.3f})"
+        lines.append(f"  {name:13s} {where} {'на ' + table.name if table else 'не на столе':16s} "
+                     f"{'верно' if right else 'НЕВЕРНО'}")
+    return lines, correct, len(positions)

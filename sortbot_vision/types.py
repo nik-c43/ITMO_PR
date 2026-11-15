@@ -38,5 +38,3 @@ class CubeDetection:
     position: np.ndarray  # (3,) центр кубика в мире, м
     yaw: float  # поворот вокруг вертикали, рад, от -pi/4 до pi/4
     size: tuple  # (длинная, короткая) стороны верхней грани, м
-    pixel: tuple  # (u, v) центр пятна в кадре
-    num_points: int  # сколько точек глубины попало на верхнюю грань

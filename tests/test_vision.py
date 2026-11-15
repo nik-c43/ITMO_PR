@@ -3,13 +3,14 @@ import dataclasses
 from pathlib import Path
 
 # sortbot_sim импортируется раньше mujoco: он включает рендер без окна.
-from sortbot_sim import SortingSim, solve_ik
+from sortbot_sim import SortingSim
 from sortbot_sim.camera import D435, IDEAL, SimCamera
+from sortbot_sim.world import cube_positions, tables_from_sim
+from sortbot_motion import Skills
 from sortbot_vision.cubes import CubeDetector
 from sortbot_vision.geometry import deproject, project, transform_points
 from sortbot_vision.types import CameraIntrinsics
 
-import mujoco
 import numpy as np
 import pytest
 
@@ -20,26 +21,14 @@ SURFACE_Z = 0.40
 def look_at_table(sensor, frames=1):
     """Робот у стола с кубиками, камера на руке смотрит на стол. Возвращает (кадры, истинные кубики)."""
     sim = SortingSim()
-    base = np.array([0.35, 0.0, 0.0])
-    sim.data.qpos[sim.base_qadr] = base
-    sim.data.ctrl[sim.base_act] = base
-    mujoco.mj_forward(sim.model, sim.data)
-
-    t = np.radians(50)
-    orientation = np.column_stack([[0, 1, 0], [np.cos(t), 0, np.sin(t)], [np.sin(t), 0, -np.cos(t)]])
-    q, ok = solve_ik(sim, base + [0.30, 0.0, 0.90], orientation,
-                     q_init=np.array([0.0, 0.6, 3.14, -1.9, 0.0, -0.65, 1.57]))
-    assert ok
-    sim.data.qpos[sim.arm_qadr] = q
-    sim.set_arm_target(q)
-    for _ in range(500):
-        sim.step()
+    table = next(t for t in tables_from_sim(sim) if t.color is None)
+    Skills(sim).look_over_table(table.near_edge, table.heading, table.surface_z)
 
     camera = SimCamera(sim, sensor=sensor)
     captured = [camera.capture() for _ in range(frames)]
     camera.close()
-    truth = [(sim.model.body(b).name.split("_")[1], sim.data.body(b).xpos.copy(), sim.body_yaw(sim.model.body(b).name))
-             for b in range(sim.model.nbody) if sim.model.body(b).name.startswith("cube_")]
+    # Цвет кубика стоит в его имени: cube_<цвет>_<номер>.
+    truth = [(name.split("_")[1], position, sim.body_yaw(name)) for name, position in cube_positions(sim).items()]
     return captured, truth
 
 
@@ -130,7 +119,7 @@ def test_d435_has_no_depth_outside_working_range(d435_scene):
 
 
 def test_core_does_not_depend_on_simulator_or_ros():
-    for package in ("sortbot_vision", "sortbot_motion"):
+    for package in ("sortbot_vision", "sortbot_motion", "sortbot_task"):
         for path in (REPO / package).glob("*.py"):
             source = path.read_text()
             assert "mujoco" not in source and "rclpy" not in source, path.name

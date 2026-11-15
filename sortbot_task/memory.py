@@ -18,8 +18,6 @@ class TrackedCube:
     color: str
     position: np.ndarray  # (3,) центр кубика в мире по последнему кадру, м
     yaw: float
-    stamp: float  # время последнего кадра, где он был виден, с
-    sightings: int = 1  # сколько раз его видели
     state: str = WAITING
     table: str | None = None  # на какой стол отвезён
 
@@ -30,7 +28,7 @@ class CubeMemory:
     cubes: list = field(default_factory=list)
     _next_id: int = 1
 
-    def observe(self, detections, stamp=0.0, in_view=None):
+    def observe(self, detections, in_view=None):
         """Учесть находки одного кадра.
 
         Находка рядом с известным кубиком того же цвета обновляет его, остальные добавляются как новые.
@@ -42,11 +40,10 @@ class CubeMemory:
         for det in detections:
             cube = self._match(det.color, det.position, exclude=seen)
             if cube is None:
-                cube = TrackedCube(self._next_id, det.color, np.array(det.position), det.yaw, stamp, sightings=0)
+                cube = TrackedCube(self._next_id, det.color, np.array(det.position), det.yaw)
                 self._next_id += 1
                 self.cubes.append(cube)
-            cube.position, cube.yaw, cube.stamp = np.array(det.position), det.yaw, stamp
-            cube.sightings += 1
+            cube.position, cube.yaw = np.array(det.position), det.yaw
             seen.add(cube.id)
         if in_view is not None:
             self.cubes = [c for c in self.cubes

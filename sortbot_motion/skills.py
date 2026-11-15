@@ -3,6 +3,7 @@
 Код не знает, симулятор под ним или настоящий робот. Ему нужен объект robot с таким интерфейсом:
 
     dt                           период управления, с
+    time                         часы робота, с
     base_pose                    положение базы в мире: (x, y, угол)
     arm_target                   углы, заданные сейчас приводам руки
     set_cmd_vel(vx, vy, wz)      скорость базы в осях робота
@@ -12,8 +13,9 @@
     solve_ik(pos, mat, q_init)   обратная кинематика, возвращает (углы, сошлось ли)
     step()                       прожить один период управления
 
-В симуляторе step() делает шаг физики. В узле ROS 2 он будет ждать один период и
-обрабатывать пришедшие сообщения.
+В симуляторе step() делает шаг физики, в узле ROS 2 ждёт один период управления.
+Длительности движений отсчитываются по часам робота, а не по числу шагов: если цикл
+управления не успевает за заданным периодом, движения всё равно длятся столько, сколько задано.
 """
 from dataclasses import dataclass, field
 
@@ -29,6 +31,16 @@ def top_down(yaw):
     return np.array([[c, s, 0.0],
                      [s, -c, 0.0],
                      [0.0, 0.0, -1.0]])
+
+
+def tilted_down(tilt, heading):
+    """Ориентация захвата «вперёд и вниз»: ось подхода отклонена от вертикали на tilt в сторону heading.
+
+    Так камера на запястье смотрит на стол перед роботом сверху под углом.
+    """
+    forward_down = np.column_stack([[0, 1, 0], [np.cos(tilt), 0, np.sin(tilt)], [np.sin(tilt), 0, -np.cos(tilt)]])
+    c, s = np.cos(heading), np.sin(heading)
+    return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]]) @ forward_down
 
 
 @dataclass
@@ -77,7 +89,9 @@ class Skills:
             self.on_step()
 
     def wait(self, seconds):
-        for _ in range(int(seconds / self.robot.dt)):
+        # Половина периода в запасе: иначе из-за округления выходил бы лишний шаг.
+        end = self.robot.time + seconds - 0.5 * self.robot.dt
+        while self.robot.time < end:
             self.tick()
 
     def drive_to(self, x, y, th, timeout=20.0):
@@ -85,7 +99,8 @@ class Skills:
         cfg, robot = self.config, self.robot
         goal = np.array([x, y, th])
         reached = False
-        for _ in range(int(timeout / robot.dt)):
+        deadline = robot.time + timeout
+        while robot.time < deadline:
             pose = robot.base_pose
             err = goal - pose
             err[2] = (err[2] + np.pi) % (2 * np.pi) - np.pi
@@ -105,12 +120,15 @@ class Skills:
 
     def move_arm(self, q_goal, duration=2.0):
         """Плавно перевести цель приводов руки в q_goal за duration секунд."""
-        q_start = self.robot.arm_target
-        steps = int(duration / self.robot.dt)
-        for i in range(1, steps + 1):
-            s = i / steps
-            s = 3 * s**2 - 2 * s**3  # плавный разгон и торможение
-            self.robot.set_arm_target(q_start + s * (q_goal - q_start))
+        robot = self.robot
+        q_start = robot.arm_target
+        start = robot.time
+        progress = 0.0
+        while progress < 1.0:
+            # Цель задаётся на конец наступающего периода управления.
+            progress = min(1.0, (robot.time - start + robot.dt) / duration)
+            s = 3 * progress**2 - 2 * progress**3  # плавный разгон и торможение
+            robot.set_arm_target(q_start + s * (q_goal - q_start))
             self.tick()
         self.wait(0.3)
 
@@ -150,14 +168,9 @@ class Skills:
         forward = np.array([np.cos(heading), np.sin(heading)])
         base = np.asarray(edge_point) - cfg.overview_distance * forward
         reached = self.drive_to(base[0], base[1], heading)
-        t = cfg.overview_tilt
-        # Ориентация для heading = 0, затем поворот вокруг вертикали на heading.
-        tilted = np.column_stack([[0, 1, 0], [np.cos(t), 0, np.sin(t)], [np.sin(t), 0, -np.cos(t)]])
-        c, s = forward
-        turn = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
         pose = self.robot.base_pose
         tool = np.array([*(pose[:2] + cfg.overview_reach * forward), surface_z + cfg.overview_height])
-        self.move_tool(tool, turn @ tilted, q_init=cfg.arm_seed)
+        self.move_tool(tool, tilted_down(cfg.overview_tilt, heading), q_init=cfg.arm_seed)
         self.wait(0.5)  # дать руке успокоиться перед кадром
         return reached
 

@@ -2,7 +2,6 @@
 
 Запуск: python examples/02_inspect.py
 """
-import mujoco
 import numpy as np
 
 from sortbot_sim import SortingSim
@@ -46,10 +45,8 @@ print("время         :", d.time)
 print("база (x,y,th) :", sim.base_pose)
 print("углы руки     :", sim.arm_q)
 print("точка захвата :", d.site_xpos[sim.pinch_site])
-for b in range(m.nbody):
-    name = m.body(b).name
-    if name.startswith("cube_"):
-        print(f"{name:13s} :", d.body(b).xpos)
+for name in sim.cube_names:
+    print(f"{name:13s} :", sim.body_pos(name))
 
 print("\n=== Один шаг физики ===")
 sim.set_cmd_vel(0.3, 0.0, 0.0)  # едем вперёд со скоростью 0.3 м/с

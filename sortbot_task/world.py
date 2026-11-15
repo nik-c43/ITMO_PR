@@ -23,13 +23,22 @@ class Table:
         """Половина размера стола вдоль направления подъезда, м."""
         return float(np.abs(self.direction) @ self.half_size)
 
+    @property
+    def near_edge(self):
+        """Середина ближнего к роботу края столешницы, (x, y)."""
+        return self.center - self.depth * self.direction
+
     def contains(self, point, margin=0.0):
         """Лежит ли точка над столешницей (с запасом margin от края)."""
         return bool(np.all(np.abs(np.asarray(point)[:2] - self.center) <= self.half_size - margin))
 
+    def holds_cube(self, position, cube_size=0.04, tolerance=0.005):
+        """Стоит ли на столешнице кубик с центром в position."""
+        return self.contains(position) and abs(position[2] - self.surface_z - 0.5 * cube_size) < tolerance
+
     def place_slots(self, edge_offset=0.15, spacing=0.12, count=3):
         """Места для кубиков: ряд вдоль ближнего к роботу края, от середины в стороны."""
         side = np.array([-self.direction[1], self.direction[0]])
-        row = self.center - (self.depth - edge_offset) * self.direction
+        row = self.near_edge + edge_offset * self.direction
         offsets = sorted(spacing * (np.arange(count) - (count - 1) / 2), key=abs)
         return [row + offset * side for offset in offsets]
